@@ -9,3 +9,4 @@ desktop/dist/
 desktop/release/
 desktop/static/renderer.js
 package-lock.json
+__pycache__/
