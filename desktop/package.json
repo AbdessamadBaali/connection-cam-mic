@@ -1,0 +1,37 @@
+{
+  "name": "cam-mic-viewer",
+  "version": "2.0.0",
+  "description": "Desktop viewer for Cam Mic Streamer - use your phone as a wireless camera and microphone",
+  "main": "dist/main/main.js",
+  "author": "AbdessamadBaali",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.main.json && tsc -p tsconfig.renderer.json",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win portable"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.4"
+  },
+  "build": {
+    "appId": "com.cammic.viewer",
+    "productName": "CamMicViewer",
+    "files": [
+      "dist/**/*",
+      "static/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "CamMicViewer.exe"
+    }
+  }
+}

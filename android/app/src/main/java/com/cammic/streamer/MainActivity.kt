@@ -12,6 +12,7 @@ import android.graphics.YuvImage
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Bundle
 import android.util.Size
 import android.view.WindowManager
@@ -27,7 +28,10 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -36,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val PORT = 8080
+        private const val BEACON_PORT = 8888
         private const val SAMPLE_RATE = 44100
         private const val JPEG_QUALITY = 60
         private const val PERMISSION_REQUEST = 10
@@ -47,9 +52,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var cameraExecutor: ExecutorService
 
-    private val server = StreamServer(PORT, SAMPLE_RATE)
+    private val server = StreamServer(PORT, SAMPLE_RATE, Build.MODEL) { switchCamera() }
+    private var cameraProvider: ProcessCameraProvider? = null
+    @Volatile private var useFrontCamera = false
     @Volatile private var audioRunning = false
-    private var audioThread: Thread? = null
+    @Volatile private var beaconRunning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,7 +96,52 @@ class MainActivity : AppCompatActivity() {
         server.start()
         startCamera()
         startAudio()
+        startBeacon()
         updateStatus()
+    }
+
+    /** Broadcasts a small UDP beacon so the desktop app can auto-detect this phone. */
+    private fun startBeacon() {
+        if (beaconRunning) return
+        beaconRunning = true
+        Thread({
+            var socket: DatagramSocket? = null
+            try {
+                socket = DatagramSocket()
+                socket.broadcast = true
+                val payload = server.infoJson().toByteArray()
+                while (beaconRunning) {
+                    try {
+                        socket.send(
+                            DatagramPacket(
+                                payload, payload.size,
+                                InetAddress.getByName("255.255.255.255"), BEACON_PORT
+                            )
+                        )
+                        // Also send to each interface's broadcast address (some
+                        // routers drop the global broadcast).
+                        for (iface in NetworkInterface.getNetworkInterfaces()) {
+                            if (!iface.isUp || iface.isLoopback) continue
+                            for (ia in iface.interfaceAddresses) {
+                                val bcast = ia.broadcast ?: continue
+                                socket.send(DatagramPacket(payload, payload.size, bcast, BEACON_PORT))
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    Thread.sleep(2000)
+                }
+            } catch (_: Exception) {
+            } finally {
+                socket?.close()
+            }
+        }, "beacon").start()
+    }
+
+    fun switchCamera() {
+        runOnUiThread {
+            useFrontCamera = !useFrontCamera
+            bindCamera()
+        }
     }
 
     private fun updateStatus() {
@@ -120,37 +172,55 @@ class MainActivity : AppCompatActivity() {
     private fun startCamera() {
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
-            val provider = providerFuture.get()
-
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
-
-            val analysis = ImageAnalysis.Builder()
-                .setTargetResolution(Size(640, 480))
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-            analysis.setAnalyzer(cameraExecutor) { image ->
-                try {
-                    server.publishFrame(imageToJpeg(image, image.imageInfo.rotationDegrees))
-                } catch (_: Exception) {
-                } finally {
-                    image.close()
-                }
-            }
-
-            provider.unbindAll()
-            provider.bindToLifecycle(
-                this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis
-            )
+            cameraProvider = providerFuture.get()
+            bindCamera()
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun bindCamera() {
+        val provider = cameraProvider ?: return
+
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        val analysis = ImageAnalysis.Builder()
+            .setTargetResolution(Size(640, 480))
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+        analysis.setAnalyzer(cameraExecutor) { image ->
+            try {
+                server.publishFrame(imageToJpeg(image, image.imageInfo.rotationDegrees))
+            } catch (_: Exception) {
+            } finally {
+                image.close()
+            }
+        }
+
+        val selector = if (useFrontCamera) {
+            CameraSelector.DEFAULT_FRONT_CAMERA
+        } else {
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }
+
+        try {
+            provider.unbindAll()
+            provider.bindToLifecycle(this, selector, preview, analysis)
+        } catch (_: Exception) {
+            // e.g. device has no front camera - fall back to back camera
+            useFrontCamera = false
+            try {
+                provider.unbindAll()
+                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            } catch (_: Exception) {}
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun startAudio() {
         if (audioRunning) return
         audioRunning = true
-        audioThread = Thread({
+        Thread({
             val minBuf = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
             )
@@ -174,8 +244,7 @@ class MainActivity : AppCompatActivity() {
                 record.stop()
                 record.release()
             }
-        }, "audio-capture")
-        audioThread?.start()
+        }, "audio-capture").start()
     }
 
     private fun imageToJpeg(image: ImageProxy, rotationDegrees: Int): ByteArray {
@@ -239,6 +308,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         audioRunning = false
+        beaconRunning = false
         server.stop()
         cameraExecutor.shutdown()
     }

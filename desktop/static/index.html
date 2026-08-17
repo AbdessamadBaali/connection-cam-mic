@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' http: data:; connect-src 'self' http:; media-src 'self' http: blob:; style-src 'self'; script-src 'self'" />
+  <title>Cam Mic Viewer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>Cam&nbsp;Mic&nbsp;Viewer</span>
+    </div>
+
+    <div class="conn-controls">
+      <select id="deviceSelect" title="Detected phones">
+        <option value="">No phone detected yet…</option>
+      </select>
+      <button id="scanBtn" class="btn ghost" title="Scan the local network for phones">Scan</button>
+      <input id="ipInput" type="text" placeholder="or type IP, e.g. 192.168.1.23" spellcheck="false" />
+      <button id="connectBtn" class="btn primary">Connect</button>
+    </div>
+
+    <div class="status">
+      <span id="statusDot" class="dot off"></span>
+      <span id="statusText">Waiting for a phone… open Cam Mic Streamer on your phone.</span>
+    </div>
+  </header>
+
+  <main id="videoWrap" class="video-wrap">
+    <img id="video" alt="" draggable="false" />
+    <div id="placeholder" class="placeholder">
+      <div class="placeholder-icon">📷</div>
+      <p>Your phone's camera will appear here.</p>
+      <p class="hint">Phones running <b>Cam Mic Streamer</b> on this Wi-Fi are detected automatically.</p>
+    </div>
+    <div id="recBadge" class="rec-badge hidden">● REC <span id="recTime">00:00</span></div>
+  </main>
+
+  <footer class="controls">
+    <div class="group">
+      <button id="switchBtn" class="btn" disabled title="Switch between front and back camera">🔄 Flip camera</button>
+      <button id="snapshotBtn" class="btn" disabled title="Save a photo of the current frame">📸 Snapshot</button>
+      <button id="recordBtn" class="btn" disabled title="Record the stream to a video file">⏺ Record</button>
+    </div>
+    <div class="group">
+      <button id="mirrorBtn" class="btn" disabled title="Mirror the image horizontally">🪞 Mirror</button>
+      <button id="rotateBtn" class="btn" disabled title="Rotate the view 90°">↻ Rotate</button>
+      <button id="fullscreenBtn" class="btn" disabled title="Toggle fullscreen">⛶ Fullscreen</button>
+    </div>
+    <div class="group">
+      <label class="toggle" title="Play the phone's microphone">
+        <input type="checkbox" id="audioToggle" checked />
+        <span>🎙 Audio</span>
+      </label>
+      <input type="range" id="volumeSlider" min="0" max="100" value="80" title="Volume" />
+      <label class="toggle" title="Keep this window above all others">
+        <input type="checkbox" id="topToggle" />
+        <span>📌 On top</span>
+      </label>
+    </div>
+  </footer>
+
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>

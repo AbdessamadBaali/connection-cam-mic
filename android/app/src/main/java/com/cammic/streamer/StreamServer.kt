@@ -11,10 +11,17 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Tiny HTTP server that exposes:
  *   /        - info page
+ *   /info    - JSON identification (used by the desktop app for discovery)
  *   /video   - MJPEG stream (multipart/x-mixed-replace)
  *   /audio   - endless WAV stream (16-bit PCM mono)
+ *   /switch  - toggle front/back camera
  */
-class StreamServer(private val port: Int, val sampleRate: Int) {
+class StreamServer(
+    private val port: Int,
+    val sampleRate: Int,
+    private val deviceName: String,
+    private val onSwitchCamera: (() -> Unit)? = null
+) {
 
     @Volatile private var running = false
     private var serverSocket: ServerSocket? = null
@@ -60,6 +67,11 @@ class StreamServer(private val port: Int, val sampleRate: Int) {
         }
     }
 
+    fun infoJson(): String {
+        val safeName = deviceName.replace("\\", "").replace("\"", "")
+        return """{"app":"cammic","name":"$safeName","port":$port,"sampleRate":$sampleRate}"""
+    }
+
     private fun acceptLoop() {
         try {
             val socket = ServerSocket(port)
@@ -88,6 +100,11 @@ class StreamServer(private val port: Int, val sampleRate: Int) {
             when {
                 path.startsWith("/video") -> serveVideo(out)
                 path.startsWith("/audio") -> serveAudio(client, out)
+                path.startsWith("/info") -> serveJson(out, infoJson())
+                path.startsWith("/switch") -> {
+                    onSwitchCamera?.invoke()
+                    serveJson(out, """{"ok":true}""")
+                }
                 else -> serveIndex(out)
             }
         } catch (_: IOException) {
@@ -97,6 +114,22 @@ class StreamServer(private val port: Int, val sampleRate: Int) {
         }
     }
 
+    // CORS header lets the desktop app (and browsers) call these endpoints.
+    private fun headers(contentType: String, extra: String = ""): String =
+        "HTTP/1.0 200 OK\r\n" +
+        "Content-Type: $contentType\r\n" +
+        "Access-Control-Allow-Origin: *\r\n" +
+        "Cache-Control: no-cache\r\n" +
+        extra +
+        "Connection: close\r\n\r\n"
+
+    private fun serveJson(out: OutputStream, json: String) {
+        val body = json.toByteArray()
+        out.write(headers("application/json", "Content-Length: ${body.size}\r\n").toByteArray())
+        out.write(body)
+        out.flush()
+    }
+
     private fun serveIndex(out: OutputStream) {
         val body = """
             <html><head><title>Cam Mic Streamer</title></head>
@@ -104,26 +137,17 @@ class StreamServer(private val port: Int, val sampleRate: Int) {
             <h2>Cam Mic Streamer</h2>
             <p>Video stream: <a href="/video">/video</a> (MJPEG)</p>
             <p>Audio stream: <a href="/audio">/audio</a> (WAV, ${sampleRate} Hz mono)</p>
+            <p><a href="/switch">Switch front/back camera</a></p>
             <img src="/video" style="max-width:100%"/>
             </body></html>
         """.trimIndent().toByteArray()
-        out.write(
-            ("HTTP/1.0 200 OK\r\n" +
-             "Content-Type: text/html\r\n" +
-             "Content-Length: ${body.size}\r\n" +
-             "Connection: close\r\n\r\n").toByteArray()
-        )
+        out.write(headers("text/html", "Content-Length: ${body.size}\r\n").toByteArray())
         out.write(body)
         out.flush()
     }
 
     private fun serveVideo(out: OutputStream) {
-        out.write(
-            ("HTTP/1.0 200 OK\r\n" +
-             "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
-             "Cache-Control: no-cache\r\n" +
-             "Connection: close\r\n\r\n").toByteArray()
-        )
+        out.write(headers("multipart/x-mixed-replace; boundary=frame").toByteArray())
         var lastSent = -1L
         while (running) {
             var frame: ByteArray?
@@ -147,12 +171,7 @@ class StreamServer(private val port: Int, val sampleRate: Int) {
     }
 
     private fun serveAudio(client: Socket, out: OutputStream) {
-        out.write(
-            ("HTTP/1.0 200 OK\r\n" +
-             "Content-Type: audio/wav\r\n" +
-             "Cache-Control: no-cache\r\n" +
-             "Connection: close\r\n\r\n").toByteArray()
-        )
+        out.write(headers("audio/wav").toByteArray())
         out.write(wavStreamHeader(sampleRate))
         out.flush()
         audioClients.add(out)

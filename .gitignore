@@ -4,7 +4,8 @@ android/local.properties
 android/**/build/
 .idea/
 .DS_Store
-__pycache__/
-windows/build/
-windows/dist/
-*.spec
+node_modules/
+desktop/dist/
+desktop/release/
+desktop/static/renderer.js
+package-lock.json
