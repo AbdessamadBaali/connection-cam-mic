@@ -1,58 +1,57 @@
 # Connection Cam Mic
 
-Use your Android phone as a **camera and microphone for your PC**, over Wi-Fi — with automatic detection.
+Use your Android phone as a **wireless camera and microphone for your PC** — like DroidCam, over Wi-Fi, with automatic detection.
 
-Two apps:
+## 📥 Download
 
-| App | Folder | What it does |
-|---|---|---|
-| **Cam Mic Streamer** (Android APK) | `android/` | Streams the phone's camera (MJPEG video) and microphone (live WAV audio) from a small built-in web server, and broadcasts a beacon so PCs can find it automatically. |
-| **Cam Mic Viewer** (Windows EXE) | `desktop/` | Electron + TypeScript desktop app: auto-detects phones on the network, shows the video, plays the audio, and offers snapshot, recording, camera flip, and more. |
+| | Direct download |
+|---|---|
+| 🤖 **Android app** (install on your phone) | **[Download CamMicStreamer.apk](https://github.com/AbdessamadBaali/connection-cam-mic/releases/latest/download/CamMicStreamer.apk)** |
+| 🖥️ **Windows app** (run on your PC) | **[Download CamMicViewer.exe](https://github.com/AbdessamadBaali/connection-cam-mic/releases/latest/download/CamMicViewer.exe)** |
 
-## Desktop app features
+These links always point to the newest build (published automatically to [Releases](https://github.com/AbdessamadBaali/connection-cam-mic/releases/latest) on every update).
 
-- **Auto-detection** — phones running the app appear in the dropdown automatically (UDP beacon), plus a **Scan** button that sweeps the local network as a fallback.
-- One-click **Connect / Disconnect** (manual IP entry still available).
-- **Flip camera** — switch the phone between front and back camera remotely.
-- **Snapshot** — save the current frame as a PNG.
-- **Record** — record the stream (with audio) to a WebM video file.
-- **Mirror / Rotate / Fullscreen** view controls.
-- **Audio toggle + volume slider**.
-- **Always-on-top** window mode.
+- **APK**: your phone may ask to allow "install from unknown sources" — allow it.
+- **EXE**: portable, no installation. Windows SmartScreen may warn because the app is unsigned → click **More info → Run anyway**. When Windows Firewall asks, click **Allow** (needed for auto-detection).
 
-## How to get the apps
+## 🚀 Quick start
 
-Both apps are built automatically by GitHub Actions:
+1. Put your **phone and PC on the same Wi-Fi**.
+2. Open **Cam Mic Streamer** on the phone, allow camera + mic permissions.
+3. Open **CamMicViewer.exe** on the PC — your phone is **detected and connected automatically** within a few seconds.
 
-1. Open the **Actions** tab of this repository.
-2. Open the latest **"Build Android APK"** run → download the **CamMicStreamer-Android-APK** artifact (contains `app-debug.apk`).
-3. Open the latest **"Build Windows App"** run → download the **CamMicViewer-Windows-EXE** artifact (contains `CamMicViewer.exe`).
+That's it. If your router blocks auto-detection, press **Scan**, or type the IP shown on the phone screen.
 
-Install the APK on your phone (you may need to allow "install from unknown sources"). The Windows `.exe` is portable — just double-click it. Windows SmartScreen may warn because the app is unsigned; click **More info → Run anyway**. When Windows Firewall asks, **allow access** — that's needed for auto-detection.
+## ✨ Features
 
-## How to use
+- **Auto-detect & auto-connect** — the phone announces itself on the network; the PC app connects by itself (can be turned off).
+- **Flip camera** — switch front/back camera remotely from the PC.
+- **Snapshot** (PNG) and **Record** (WebM video with audio).
+- **Mirror / Rotate / Fullscreen** view, **volume slider**, **always-on-top** window.
+- Modern dark UI, built with **TypeScript + Electron**.
 
-1. Connect your **phone and PC to the same Wi-Fi network**.
-2. Open **Cam Mic Streamer** on the phone and allow camera + microphone permissions.
-3. Open **CamMicViewer.exe** on the PC — within a few seconds your phone appears in the dropdown ("Phone detected").
-4. Press **Connect**. Video and audio start immediately.
+## 🎥 Use it as a webcam in Zoom / Meet / Discord / OBS
 
-If auto-detection doesn't trigger (some routers block broadcasts), press **Scan**, or type the IP shown on the phone screen.
+The phone's stream is standard MJPEG, so any app that accepts a video source can use it:
 
-### Bonus: use it in other programs
+- **OBS Studio** (recommended, free):
+  1. Add source → **Browser**, URL: `http://PHONE_IP:8080/video` (the IP is shown on the phone and in the viewer's title bar area).
+  2. Click **Start Virtual Camera** in OBS.
+  3. In Zoom/Meet/Discord, pick **"OBS Virtual Camera"** as your camera. 🎉
+- **VLC**: Media → Open Network Stream → `http://PHONE_IP:8080/video` (or `/audio` for the mic).
+- **Browser**: just open `http://PHONE_IP:8080`.
 
-The streams are standard, so they also work without the viewer:
+For the microphone in calls, apps like [VB-Audio Cable](https://vb-audio.com/Cable/) can route the viewer's audio output into a virtual mic input.
 
-- **Browser**: open `http://PHONE_IP:8080` to watch the video.
-- **VLC**: open network stream `http://PHONE_IP:8080/video` (video) or `http://PHONE_IP:8080/audio` (audio).
-- **OBS Studio**: add a *Browser* or *Media* source with `http://PHONE_IP:8080/video` to use the phone as a webcam source.
+> Note: DroidCam shows up directly as a camera in Zoom because it installs a signed Windows camera driver. This project keeps things driver-free; OBS's virtual camera provides the same result.
 
-## Building locally (optional)
+## 🔧 How it works
 
-- **Android**: `cd android && gradle assembleDebug` (requires Android SDK + JDK 17). APK appears in `android/app/build/outputs/apk/debug/`.
-- **Desktop**: `cd desktop && npm install && npm start` to run in development, or `npm run dist` to build the portable Windows `.exe` (appears in `desktop/release/`).
+- The Android app runs an HTTP server on port `8080`: `/video` (MJPEG), `/audio` (streaming WAV, 44.1 kHz mono), `/info` (JSON identity), `/switch` (toggle camera).
+- It broadcasts a UDP beacon on port `8888` every 2 seconds; the desktop app listens for beacons and can also actively scan the subnet.
+- On every push, GitHub Actions builds the APK (Gradle) and the portable EXE (electron-builder) and refreshes the **latest** release.
 
-## How it works
+## 🛠️ Building locally
 
-- The Android app runs an HTTP server on port `8080`: `/video` (MJPEG), `/audio` (streaming WAV), `/info` (JSON identity), `/switch` (toggle front/back camera).
-- It broadcasts a UDP beacon on port `8888` every 2 seconds; the desktop app listens for it and also can actively scan the subnet by probing `/info`.
+- **Android**: `cd android && gradle assembleDebug` (Android SDK + JDK 17). APK: `android/app/build/outputs/apk/debug/`.
+- **Desktop**: `cd desktop && npm install && npm start` for development, `npm run dist` to produce `desktop/release/CamMicViewer.exe`.

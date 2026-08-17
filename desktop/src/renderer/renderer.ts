@@ -37,6 +37,7 @@ const recordBtn = $<HTMLButtonElement>('recordBtn');
 const mirrorBtn = $<HTMLButtonElement>('mirrorBtn');
 const rotateBtn = $<HTMLButtonElement>('rotateBtn');
 const fullscreenBtn = $<HTMLButtonElement>('fullscreenBtn');
+const autoToggle = $<HTMLInputElement>('autoToggle');
 const audioToggle = $<HTMLInputElement>('audioToggle');
 const volumeSlider = $<HTMLInputElement>('volumeSlider');
 const topToggle = $<HTMLInputElement>('topToggle');
@@ -45,6 +46,7 @@ const topToggle = $<HTMLInputElement>('topToggle');
 
 const devices = new Map<string, Device>();
 let connected = false;
+let connecting = false;
 let baseUrl = '';
 let deviceName = '';
 let mirrored = false;
@@ -85,9 +87,14 @@ function upsertDevice(device: Device): void {
   devices.set(device.ip, device);
   if (isNew) {
     renderDeviceList(device.ip);
-    if (!connected) {
+    if (!connected && !connecting) {
       ipInput.value = device.ip;
-      setStatus('off', `Phone detected: ${device.name} (${device.ip}) - press Connect.`);
+      if (autoToggle.checked) {
+        setStatus('connecting', `Phone detected: ${device.name} (${device.ip}) - connecting…`);
+        void connect();
+      } else {
+        setStatus('off', `Phone detected: ${device.name} (${device.ip}) - press Connect.`);
+      }
     }
   }
 }
@@ -153,11 +160,13 @@ async function fetchJson(url: string, timeoutMs: number): Promise<Record<string,
 }
 
 async function connect(): Promise<void> {
+  if (connecting || connected) return;
   const ip = targetIp();
   if (!ip) {
     setStatus('error', 'Pick a detected phone or type its IP address.');
     return;
   }
+  connecting = true;
   const port = devices.get(ip)?.port ?? 8080;
   baseUrl = `http://${ip}:${port}`;
   setStatus('connecting', `Connecting to ${ip}…`);
@@ -168,6 +177,7 @@ async function connect(): Promise<void> {
   } catch {
     setStatus('error', `Could not reach ${ip}. Check that the phone app is open and on the same Wi-Fi.`);
     connectBtn.disabled = false;
+    connecting = false;
     return;
   }
 
@@ -177,6 +187,7 @@ async function connect(): Promise<void> {
   placeholder.classList.add('hidden');
 
   connected = true;
+  connecting = false;
   connectBtn.disabled = false;
   connectBtn.textContent = 'Disconnect';
   connectBtn.classList.add('disconnect');
@@ -188,6 +199,7 @@ async function connect(): Promise<void> {
 
 function disconnect(showStatus = true): void {
   connected = false;
+  connecting = false;
   stopRecording(false);
   stopAudio();
   video.removeAttribute('src');
@@ -423,6 +435,13 @@ function stopRecording(save = true): void {
 recordBtn.addEventListener('click', () => {
   if (recorder) stopRecording();
   else startRecording();
+});
+
+// ---------- remember preferences ----------
+
+autoToggle.checked = localStorage.getItem('autoConnect') !== 'off';
+autoToggle.addEventListener('change', () => {
+  localStorage.setItem('autoConnect', autoToggle.checked ? 'on' : 'off');
 });
 
 export {};
