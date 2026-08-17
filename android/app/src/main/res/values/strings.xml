@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cam Mic Streamer</string>
+    <string name="waiting_for_network">Connect to Wi-Fi to get an address…</string>
+    <string name="permissions_needed">Camera and microphone permissions are required. Please grant them in Settings.</string>
+</resources>

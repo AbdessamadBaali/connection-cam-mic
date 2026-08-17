@@ -1,0 +1,36 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "windows/**"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: windows
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build executable
+        working-directory: windows
+        run: pyinstaller --onefile --windowed --name CamMicViewer viewer.py
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: CamMicViewer-Windows-EXE
+          path: windows/dist/CamMicViewer.exe
